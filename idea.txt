@@ -1,0 +1,361 @@
+// Project structure:
+//
+// shared-zustand-demo/
+// ├── package.json
+// ├── tsconfig.json
+// ├── public/
+// │   └── index.html
+// ├── src/
+//     ├── index.tsx                 (Entry point that renders all apps)
+//     ├── store/
+//     │   └── store.ts              (Shared Zustand store)
+//     ├── apps/
+//     │   ├── App1.tsx              (First React application)
+//     │   ├── App2.tsx              (Second React application)
+//     │   └── App3.tsx              (Third React application)
+//     └── utils/
+//         └── windowStore.ts        (Utility to expose store on window)
+
+// package.json
+/*
+{
+  "name": "shared-zustand-demo",
+  "version": "1.0.0",
+  "description": "Demo of shared Zustand store between multiple React applications",
+  "main": "src/index.tsx",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "typescript": "^4.9.5",
+    "zustand": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.20",
+    "@types/react-dom": "^18.2.7"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
+*/
+
+// tsconfig.json
+/*
+{
+  "compilerOptions": {
+    "target": "es5",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx"
+  },
+  "include": ["src"]
+}
+*/
+
+// public/index.html
+/*
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Shared Zustand Store Demo</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        margin: 0;
+        padding: 20px;
+      }
+      .app-container {
+        border: 2px solid #e0e0e0;
+        margin-bottom: 20px;
+        padding: 20px;
+        border-radius: 6px;
+      }
+      .app-container h1 {
+        margin-top: 0;
+      }
+      button {
+        background-color: #4CAF50;
+        border: none;
+        color: white;
+        padding: 10px 15px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 16px;
+        margin: 4px 2px;
+        cursor: pointer;
+        border-radius: 4px;
+      }
+      input {
+        padding: 10px;
+        font-size: 16px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-right: 10px;
+      }
+      .counter-display {
+        font-size: 24px;
+        margin: 10px 0;
+      }
+      .todo-item {
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+      }
+      .remove-button {
+        background-color: #f44336;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Demo: Shared Zustand Store Across Multiple React Apps</h1>
+    <div id="app1"></div>
+    <div id="app2"></div>
+    <div id="app3"></div>
+  </body>
+</html>
+*/
+
+// src/store/store.ts
+import { create } from 'zustand';
+
+// Define the store state interface
+interface StoreState {
+  counter: number;
+  todos: { id: number; text: string; completed: boolean }[];
+  theme: 'light' | 'dark';
+
+  // Actions
+  increment: () => void;
+  decrement: () => void;
+  addTodo: (text: string) => void;
+  toggleTodo: (id: number) => void;
+  removeTodo: (id: number) => void;
+  setTheme: (theme: 'light' | 'dark') => void;
+}
+
+// Create the store
+export const useStore = create<StoreState>((set) => ({
+  counter: 0,
+  todos: [],
+  theme: 'light',
+
+  // Action implementations
+  increment: () => set((state) => ({ counter: state.counter + 1 })),
+  decrement: () => set((state) => ({ counter: state.counter - 1 })),
+
+  addTodo: (text) => set((state) => ({
+    todos: [...state.todos, { id: Date.now(), text, completed: false }]
+  })),
+
+  toggleTodo: (id) => set((state) => ({
+    todos: state.todos.map(todo =>
+      todo.id === id ? { ...todo, completed: !todo.completed } : todo
+    )
+  })),
+
+  removeTodo: (id) => set((state) => ({
+    todos: state.todos.filter(todo => todo.id !== id)
+  })),
+
+  setTheme: (theme) => set({ theme })
+}));
+
+// src/utils/windowStore.ts
+import { useStore } from '../store/store';
+
+// Expose the store on the window object for cross-app access
+declare global {
+  interface Window {
+    sharedStore: {
+      getState: typeof useStore.getState;
+      setState: typeof useStore.setState;
+      subscribe: typeof useStore.subscribe;
+      destroy: typeof useStore.destroy;
+    };
+  }
+}
+
+// Initialize the shared store on the window object
+export const initializeWindowStore = () => {
+  window.sharedStore = useStore;
+};
+
+// Helper hook to get the store from the window object in other applications
+export const useSharedStore = () => {
+  // This ensures we're using the window store if available, falling back to the local useStore
+  return window.sharedStore || useStore;
+};
+
+// src/apps/App1.tsx
+import React, { useState } from 'react';
+import { useSharedStore } from '../utils/windowStore';
+
+const App1: React.FC = () => {
+  const store = useSharedStore();
+  const counter = store(state => state.counter);
+  const { increment, decrement } = store();
+
+  return (
+    <div className="app-container">
+      <h1>App 1: Counter</h1>
+      <div className="counter-display">Counter: {counter}</div>
+      <div>
+        <button onClick={increment}>Increment</button>
+        <button onClick={decrement}>Decrement</button>
+      </div>
+    </div>
+  );
+};
+
+export default App1;
+
+// src/apps/App2.tsx
+import React, { useState } from 'react';
+import { useSharedStore } from '../utils/windowStore';
+
+const App2: React.FC = () => {
+  const store = useSharedStore();
+  const todos = store(state => state.todos);
+  const { addTodo, toggleTodo, removeTodo } = store();
+
+  const [newTodo, setNewTodo] = useState('');
+
+  const handleAddTodo = () => {
+    if (newTodo.trim()) {
+      addTodo(newTodo.trim());
+      setNewTodo('');
+    }
+  };
+
+  return (
+    <div className="app-container">
+      <h1>App 2: Todo List</h1>
+      <div>
+        <input
+          type="text"
+          value={newTodo}
+          onChange={(e) => setNewTodo(e.target.value)}
+          placeholder="Add a new todo"
+          onKeyPress={(e) => e.key === 'Enter' && handleAddTodo()}
+        />
+        <button onClick={handleAddTodo}>Add Todo</button>
+      </div>
+      <div>
+        {todos.length === 0 ? (
+          <p>No todos yet. Add one above!</p>
+        ) : (
+          todos.map(todo => (
+            <div key={todo.id} className="todo-item">
+              <div>
+                <input
+                  type="checkbox"
+                  checked={todo.completed}
+                  onChange={() => toggleTodo(todo.id)}
+                />
+                <span style={{
+                  marginLeft: '10px',
+                  textDecoration: todo.completed ? 'line-through' : 'none'
+                }}>
+                  {todo.text}
+                </span>
+              </div>
+              <button className="remove-button" onClick={() => removeTodo(todo.id)}>Remove</button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default App2;
+
+// src/apps/App3.tsx
+import React from 'react';
+import { useSharedStore } from '../utils/windowStore';
+
+const App3: React.FC = () => {
+  const store = useSharedStore();
+  const theme = store(state => state.theme);
+  const counter = store(state => state.counter);
+  const todos = store(state => state.todos);
+  const { setTheme } = store();
+
+  return (
+    <div className="app-container" style={{
+      backgroundColor: theme === 'dark' ? '#333' : '#fff',
+      color: theme === 'dark' ? '#fff' : '#333',
+    }}>
+      <h1>App 3: App Status & Theme Switcher</h1>
+      <div>
+        <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
+          Switch to {theme === 'light' ? 'Dark' : 'Light'} Theme
+        </button>
+      </div>
+      <div style={{ marginTop: '20px' }}>
+        <h3>Current Store State:</h3>
+        <p>Theme: {theme}</p>
+        <p>Counter: {counter}</p>
+        <p>Total Todos: {todos.length}</p>
+        <p>Completed Todos: {todos.filter(todo => todo.completed).length}</p>
+      </div>
+    </div>
+  );
+};
+
+export default App3;
+
+// src/index.tsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App1 from './apps/App1';
+import App2 from './apps/App2';
+import App3 from './apps/App3';
+import { initializeWindowStore } from './utils/windowStore';
+
+// Initialize the window store at application startup
+initializeWindowStore();
+
+// Mount each app to its respective DOM element
+const renderApp = (Component: React.ComponentType, elementId: string) => {
+  const container = document.getElementById(elementId);
+  if (container) {
+    const root = ReactDOM.createRoot(container);
+    root.render(<Component />);
+  }
+};
+
+renderApp(App1, 'app1');
+renderApp(App2, 'app2');
+renderApp(App3, 'app3');
